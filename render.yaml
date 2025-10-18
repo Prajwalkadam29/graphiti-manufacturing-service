@@ -15,6 +15,8 @@ services:
         value: false
       - key: GEMINI_RERANKER_MODEL
         value: false
+      - key: GRAPHITI_PROVIDER
+        sync: false
       - key: NEO4J_URI
         sync: false
       - key: NEO4J_USER
