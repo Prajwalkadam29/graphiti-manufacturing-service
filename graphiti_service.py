@@ -144,6 +144,7 @@ class AddEpisodeRequest(BaseModel):
     episode_body: str
     source_description: str
     reference_time: Optional[str] = None
+    skip_duplicate_check: bool = False  # Set to True to force add even if duplicate exists
 
 # ============================================
 # API ENDPOINTS
@@ -204,6 +205,8 @@ async def add_episode(data: AddEpisodeRequest):
 
     This creates an episode node and extracts entities/relationships
     automatically using Gemini's understanding.
+    
+    Set skip_duplicate_check=true to force add even if episode name exists.
     """
     if not graphiti:
         raise HTTPException(
@@ -213,6 +216,30 @@ async def add_episode(data: AddEpisodeRequest):
 
     try:
         logger.info(f"📝 Adding episode: {data.name}")
+        
+        # Check for duplicate episodes (unless explicitly skipped)
+        if not data.skip_duplicate_check:
+            try:
+                # Query Neo4j directly for episodes with this name
+                async with graphiti.driver.session() as session:
+                    result = await session.run(
+                        "MATCH (e:Episode {name: $name}) RETURN e.uuid as uuid, e.name as name LIMIT 1",
+                        name=data.name
+                    )
+                    record = await result.single()
+                    
+                    if record:
+                        logger.warning(f"⚠️ Episode '{data.name}' already exists")
+                        return {
+                            "status": "duplicate",
+                            "episode_id": str(record["uuid"]),
+                            "episode_name": record["name"],
+                            "message": "Episode with this name already exists. Set 'skip_duplicate_check': true to force add.",
+                            "timestamp": datetime.utcnow().isoformat()
+                        }
+            except Exception as e:
+                logger.warning(f"Could not check for duplicates: {e}")
+                # Continue anyway if duplicate check fails
 
         # Parse reference time if provided
         ref_time = datetime.utcnow()
@@ -479,15 +506,110 @@ async def get_stats():
         raise HTTPException(status_code=503, detail="Graphiti not initialized")
 
     try:
-        # This would require custom Cypher queries through Graphiti's driver
-        # For now, return basic status
-        return {
+        stats = {
             "status": "success",
-            "message": "Graph statistics endpoint - implementation depends on your specific needs",
             "timestamp": datetime.utcnow().isoformat()
         }
+        
+        # Query Neo4j for basic statistics
+        async with graphiti.driver.session() as session:
+            # Count episodes
+            result = await session.run("MATCH (e:Episode) RETURN count(e) as count")
+            record = await result.single()
+            stats["episodes_count"] = record["count"] if record else 0
+            
+            # Count entities
+            result = await session.run("MATCH (n:Entity) RETURN count(n) as count")
+            record = await result.single()
+            stats["entities_count"] = record["count"] if record else 0
+            
+            # Count relationships
+            result = await session.run("MATCH ()-[r]->() RETURN count(r) as count")
+            record = await result.single()
+            stats["relationships_count"] = record["count"] if record else 0
+            
+        return stats
+        
     except Exception as e:
         logger.error(f"❌ Failed to get stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/episodes")
+async def list_episodes(limit: int = 10):
+    """
+    List all episodes in the knowledge graph
+    """
+    if not graphiti:
+        raise HTTPException(status_code=503, detail="Graphiti not initialized")
+    
+    try:
+        episodes = []
+        
+        async with graphiti.driver.session() as session:
+            result = await session.run(
+                """
+                MATCH (e:Episode) 
+                RETURN e.uuid as uuid, e.name as name, e.created_at as created_at, 
+                       e.source_description as source
+                ORDER BY e.created_at DESC
+                LIMIT $limit
+                """,
+                limit=limit
+            )
+            
+            async for record in result:
+                episodes.append({
+                    "uuid": str(record["uuid"]),
+                    "name": record["name"],
+                    "created_at": str(record["created_at"]) if record["created_at"] else None,
+                    "source": record["source"]
+                })
+        
+        return {
+            "status": "success",
+            "episodes": episodes,
+            "count": len(episodes),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to list episodes: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/episode/{episode_uuid}")
+async def delete_episode(episode_uuid: str):
+    """
+    Delete an episode and its associated data
+    """
+    if not graphiti:
+        raise HTTPException(status_code=503, detail="Graphiti not initialized")
+    
+    try:
+        async with graphiti.driver.session() as session:
+            # Delete episode and its relationships
+            result = await session.run(
+                """
+                MATCH (e:Episode {uuid: $uuid})
+                DETACH DELETE e
+                RETURN count(e) as deleted
+                """,
+                uuid=episode_uuid
+            )
+            record = await result.single()
+            
+            if record and record["deleted"] > 0:
+                return {
+                    "status": "success",
+                    "message": f"Episode {episode_uuid} deleted successfully",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            else:
+                raise HTTPException(status_code=404, detail="Episode not found")
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to delete episode: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================
