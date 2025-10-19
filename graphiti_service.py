@@ -223,25 +223,54 @@ async def add_episode(data: AddEpisodeRequest):
                 logger.warning(f"Failed to parse reference_time: {e}, using current time")
 
         # Add episode - Graphiti will automatically extract entities and relationships
-        episode = await graphiti.add_episode(
+        result = await graphiti.add_episode(
             name=data.name,
             episode_body=data.episode_body,
             source_description=data.source_description,
             reference_time=ref_time
         )
 
-        logger.info(f"✅ Episode created: {episode.uuid}")
+        # FIXED: Handle different return types from add_episode
+        episode_id = None
+        entities_count = 0
+        relations_count = 0
+        
+        # Try to extract episode information from result
+        if hasattr(result, 'episode'):
+            episode = result.episode
+            if hasattr(episode, 'uuid'):
+                episode_id = str(episode.uuid)
+            elif hasattr(episode, 'id'):
+                episode_id = str(episode.id)
+        
+        # Try to get entity/relation counts
+        if hasattr(result, 'nodes'):
+            entities_count = len(result.nodes) if result.nodes else 0
+        if hasattr(result, 'edges'):
+            relations_count = len(result.edges) if result.edges else 0
+
+        # Fallback if no episode ID found
+        if not episode_id:
+            episode_id = "created"  # Generic placeholder
+
+        logger.info(f"✅ Episode processed successfully")
+        logger.info(f"   Entities extracted: {entities_count}")
+        logger.info(f"   Relations extracted: {relations_count}")
 
         return {
             "status": "success",
-            "episode_id": str(episode.uuid),
+            "episode_id": episode_id,
             "episode_name": data.name,
+            "entities_extracted": entities_count,
+            "relations_extracted": relations_count,
             "message": "Episode added successfully. Entities and relationships extracted automatically.",
             "timestamp": datetime.utcnow().isoformat()
         }
 
     except Exception as e:
         logger.error(f"❌ Failed to add episode: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/build-graph")
@@ -273,14 +302,23 @@ async def build_graph(data: GraphInput):
         # Create episode first
         episode_body = f"Manufacturing document containing {len(data.nodes)} entities and {len(data.edges)} relationships"
 
-        episode = await graphiti.add_episode(
+        result = await graphiti.add_episode(
             name=data.episode_name,
             episode_body=episode_body,
             source_description=data.source_description,
             reference_time=ref_time
         )
 
-        logger.info(f"✅ Created episode: {episode.uuid}")
+        # Extract episode ID
+        episode_id = "created"
+        if hasattr(result, 'episode'):
+            episode = result.episode
+            if hasattr(episode, 'uuid'):
+                episode_id = str(episode.uuid)
+            elif hasattr(episode, 'id'):
+                episode_id = str(episode.id)
+
+        logger.info(f"✅ Created episode: {episode_id}")
 
         # Track created nodes mapping for edge creation
         node_uuid_map = {}
@@ -362,7 +400,7 @@ async def build_graph(data: GraphInput):
 
         return {
             "status": "success",
-            "episode_id": str(episode.uuid),
+            "episode_id": episode_id,
             "episode_name": data.episode_name,
             "nodes_created": successful_nodes,
             "nodes_failed": len(data.nodes) - successful_nodes,
@@ -375,6 +413,8 @@ async def build_graph(data: GraphInput):
 
     except Exception as e:
         logger.error(f"❌ Failed to build graph: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/search-graph")
@@ -404,9 +444,9 @@ async def search_graph(data: SearchQuery):
         formatted_results = []
         for result in search_results:
             node_data = {
-                "uuid": str(result.uuid),
-                "name": result.name,
-                "labels": result.labels,
+                "uuid": str(result.uuid) if hasattr(result, 'uuid') else None,
+                "name": result.name if hasattr(result, 'name') else None,
+                "labels": result.labels if hasattr(result, 'labels') else [],
                 "fact": getattr(result, 'fact', None),
                 "valid_at": str(result.valid_at) if hasattr(result, 'valid_at') else None,
                 "invalid_at": str(result.invalid_at) if hasattr(result, 'invalid_at') else None,
@@ -426,6 +466,8 @@ async def search_graph(data: SearchQuery):
 
     except Exception as e:
         logger.error(f"❌ Search failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/stats")
