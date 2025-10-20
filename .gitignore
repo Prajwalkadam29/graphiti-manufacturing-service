@@ -1,0 +1,106 @@
+.env
+.env.local
+.env.*.local
+*.env
+.env.production
+.env.development
+.env.test
+
+# API Keys and secrets
+secrets/
+credentials/
+*.pem
+*.key
+*.cert
+
+# ==========================================
+# 🐍 Python
+# ==========================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# pyenv
+.python-version
+
+# Environments
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Neo4j local database files
+neo4j/
+*.db
+*.db-shm
+*.db-wal
+
+# VS Code
+.vscode/
+*.code-workspace
+
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+
+
+# Local configuration overrides
+config.local.py
+settings.local.py
