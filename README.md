@@ -288,6 +288,7 @@ You should see:
 ```bash
 curl https://your-service.onrender.com/health
 ```
+*Note:* Instead of `https://your-service.onrender.com`, you can hit request on `http://localhost:8000`.
 
 **Response**:
 ```json
