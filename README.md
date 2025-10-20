@@ -758,7 +758,7 @@ manufacturing-graphiti-service/
 ## 🤝 Support
 
 ### Documentation
-- [Graphiti Core Docs]([https://docs.graphiti.ai/](https://help.getzep.com/graphiti/getting-started/quick-start#basic-search))
+- [Graphiti Core Docs](https://help.getzep.com/graphiti/getting-started/quick-start#basic-search).
 - [Google Gemini API](https://ai.google.dev/docs)
 - [Neo4j Documentation](https://neo4j.com/docs/)
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
